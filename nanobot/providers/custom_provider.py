@@ -36,7 +36,13 @@ class CustomProvider(LLMProvider):
         if reasoning_effort:
             kwargs["reasoning_effort"] = reasoning_effort
         if tools:
-            kwargs.update(tools=tools, tool_choice=tool_choice or "auto")
+            # Thinking models don't support object-style tool_choice; downgrade to "auto" or "required"
+            _THINKING_MODELS = ("glm-5",)
+            is_thinking = any(m in kwargs["model"].lower() for m in _THINKING_MODELS)
+            if is_thinking and isinstance(tool_choice, dict):
+                kwargs.update(tools=tools, tool_choice="required")
+            else:
+                kwargs.update(tools=tools, tool_choice=tool_choice or "auto")
         try:
             return self._parse(await self._client.chat.completions.create(**kwargs))
         except Exception as e:
