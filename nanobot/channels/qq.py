@@ -8,11 +8,13 @@ from collections import deque
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx
 from loguru import logger
 
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
+from nanobot.config.paths import get_media_dir
 from nanobot.config.schema import QQConfig
 
 try:
@@ -593,19 +595,23 @@ class QQChannel(BaseChannel):
 
             content = (data.content or "").strip()
 
-            # 提取图片附件URL
-            media_urls = []
+            # 提取图片附件并下载到本地
+            media_paths = []
             if hasattr(data, 'attachments') and data.attachments:
                 for attachment in data.attachments:
-                    # 检查是否为图片类型
                     content_type = getattr(attachment, 'content_type', '') or ''
                     url = getattr(attachment, 'url', None)
+                    filename = getattr(attachment, 'filename', None) or 'image'
+                    
                     if url and content_type.startswith('image/'):
-                        media_urls.append(url)
-                        logger.debug("QQ image attachment: {} ({})", url, content_type)
+                        # 下载图片到本地
+                        local_path = await self._download_image(url, filename, content_type)
+                        if local_path:
+                            media_paths.append(local_path)
+                            logger.debug("QQ image downloaded: {} -> {}", url, local_path)
 
             # 如果既没有文本也没有图片，跳过
-            if not content and not media_urls:
+            if not content and not media_paths:
                 return
 
             if is_group:
@@ -621,8 +627,44 @@ class QQChannel(BaseChannel):
                 sender_id=user_id,
                 chat_id=chat_id,
                 content=content,
-                media=media_urls if media_urls else None,
+                media=media_paths if media_paths else None,
                 metadata={"message_id": data.id},
             )
         except Exception:
             logger.exception("Error handling QQ message")
+
+    async def _download_image(self, url: str, filename: str, content_type: str) -> str | None:
+        """Download image from URL to local media directory."""
+        try:
+            # 确定文件扩展名
+            ext_map = {
+                'image/png': '.png',
+                'image/jpeg': '.jpg',
+                'image/gif': '.gif',
+                'image/webp': '.webp',
+                'image/bmp': '.bmp',
+            }
+            ext = ext_map.get(content_type, Path(filename).suffix or '.jpg')
+            
+            # 创建媒体目录
+            media_dir = get_media_dir("qq")
+            
+            # 使用 URL 的一部分作为文件名，避免冲突
+            import hashlib
+            url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+            file_path = media_dir / f"{url_hash}{ext}"
+            
+            # 如果文件已存在，直接返回
+            if file_path.exists():
+                return str(file_path)
+            
+            # 下载图片
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                file_path.write_bytes(response.content)
+            
+            return str(file_path)
+        except Exception as e:
+            logger.warning("Failed to download QQ image {}: {}", url, e)
+            return None
