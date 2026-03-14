@@ -592,7 +592,20 @@ class QQChannel(BaseChannel):
             self._processed_ids.append(data.id)
 
             content = (data.content or "").strip()
-            if not content:
+
+            # 提取图片附件URL
+            media_urls = []
+            if hasattr(data, 'attachments') and data.attachments:
+                for attachment in data.attachments:
+                    # 检查是否为图片类型
+                    content_type = getattr(attachment, 'content_type', '') or ''
+                    url = getattr(attachment, 'url', None)
+                    if url and content_type.startswith('image/'):
+                        media_urls.append(url)
+                        logger.debug("QQ image attachment: {} ({})", url, content_type)
+
+            # 如果既没有文本也没有图片，跳过
+            if not content and not media_urls:
                 return
 
             if is_group:
@@ -608,6 +621,7 @@ class QQChannel(BaseChannel):
                 sender_id=user_id,
                 chat_id=chat_id,
                 content=content,
+                media=media_urls if media_urls else None,
                 metadata={"message_id": data.id},
             )
         except Exception:
