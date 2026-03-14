@@ -198,6 +198,11 @@ class AgentLoop:
                 model=self.model,
             )
 
+            # DEBUG: 记录响应状态
+            logger.debug("LLM response: has_tool_calls={}, finish_reason={}, content_len={}",
+                        response.has_tool_calls, response.finish_reason, 
+                        len(response.content) if response.content else 0)
+
             if response.has_tool_calls:
                 if on_progress:
                     thought = self._strip_think(response.content)
@@ -224,7 +229,10 @@ class AgentLoop:
                         messages, tool_call.id, tool_call.name, result
                     )
             else:
+                # DEBUG: 记录模型返回的原始内容
+                logger.debug("LLM response content before strip: {}", (response.content or "")[:500])
                 clean = self._strip_think(response.content)
+                logger.debug("LLM response content after strip: {}", (clean or "")[:500])
                 # Don't persist error responses to session history — they can
                 # poison the context and cause permanent 400 loops (#1303).
                 if response.finish_reason == "error":
