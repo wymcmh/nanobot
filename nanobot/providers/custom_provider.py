@@ -13,9 +13,11 @@ from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 
 class CustomProvider(LLMProvider):
 
-    def __init__(self, api_key: str = "no-key", api_base: str = "http://localhost:8000/v1", default_model: str = "default"):
+    def __init__(self, api_key: str = "no-key", api_base: str = "http://localhost:8000/v1", default_model: str = "default",
+                 thinking_models: list[str] | None = None):
         super().__init__(api_key, api_base)
         self.default_model = default_model
+        self.thinking_models = thinking_models or ["glm-5"]
         # Keep affinity stable for this provider instance to improve backend cache locality.
         self._client = AsyncOpenAI(
             api_key=api_key,
@@ -37,8 +39,7 @@ class CustomProvider(LLMProvider):
             kwargs["reasoning_effort"] = reasoning_effort
         if tools:
             # Thinking models don't support object-style tool_choice; downgrade to "auto" or "required"
-            _THINKING_MODELS = ("glm-5",)
-            is_thinking = any(m in kwargs["model"].lower() for m in _THINKING_MODELS)
+            is_thinking = any(m in kwargs["model"].lower() for m in self.thinking_models)
             if is_thinking and isinstance(tool_choice, dict):
                 kwargs.update(tools=tools, tool_choice="required")
             else:

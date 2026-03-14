@@ -244,6 +244,8 @@ class AgentDefaults(Base):
     # Deprecated compatibility field: accepted from old configs but ignored at runtime.
     memory_window: int | None = Field(default=None, exclude=True)
     reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
+    # Thinking models don't support object-style tool_choice; auto-downgrade to "required"
+    thinking_models: list[str] = Field(default_factory=lambda: ["glm-5"])
 
     @property
     def should_warn_deprecated_memory_window(self) -> bool:
