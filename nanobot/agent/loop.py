@@ -232,7 +232,7 @@ class AgentLoop:
                 # DEBUG: 记录模型返回的原始内容
                 logger.debug("LLM response content before strip: {}", (response.content or "")[:500])
                 clean = self._strip_think(response.content)
-                logger.debug("LLM response content after strip: {}", (clean or "")[:500])
+#                logger.debug("LLM response content after strip: {}", (clean or "")[:500])
                 # Don't persist error responses to session history — they can
                 # poison the context and cause permanent 400 loops (#1303).
                 if response.finish_reason == "error":
